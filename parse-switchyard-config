@@ -1,0 +1,63 @@
+#!/usr/bin/env scala
+
+import scala.xml._
+
+val program = new Exception().getStackTrace.head.getFileName
+if (args.length < 1 || args(0).contains("help")) {
+  println(s"Usage: ${program} <switchyard.xml>")
+  sys.exit(0)
+}
+
+trait Element
+case class Service(name: String, promote: String, interface: String, bindings: List[String]) extends Element {
+  override def toString =
+    s"""Service(${name}) => "${promote}" [${interface}] [${bindings.mkString(", ")}]"""
+}
+case class Component(name: String, impl: String, service: String, references: List[String]) extends Element {
+  override def toString =
+    s"""Component(${name}) [${impl}]
+    Service(${service})
+    Reference(${references.mkString(", ")})"""
+}
+case class Reference(name: String, promote: String, interface: String, bindings: List[String]) extends Element {
+  override def toString =
+    s"""Reference(${name}) => "${promote}" [${interface}] [${bindings.mkString(", ")}]"""
+}
+
+def interface(n: Node): String =
+  n.child.find(_.label.startsWith("interface")).map(_.label).getOrElse("")
+
+def bindings(n: Node): List[String] =
+  n.child.filter(_.label.startsWith("binding")).map(_.label).toList
+
+def impl(n: Node): String =
+  n.child.find(_.label.startsWith("implementation")).map(_.label).getOrElse("")
+
+def service(n: Node): String =
+  n.child.find(_.label == "service").map(_ \@ "name").getOrElse("")
+
+def references(n: Node): List[String] =
+  n.child.filter(_.label == "reference").map(_ \@ "name").toList
+
+def parse(composite: Node): List[Element] =
+  composite.child.foldLeft(List[Element]()) { (acc, n) =>
+    n.label match {
+      case "service" =>
+        acc :+ Service(n \@ "name", n \@ "promote", interface(n), bindings(n))
+      case "component" =>
+        acc :+ Component(n \@ "name", impl(n), service(n), references(n))
+      case "reference" =>
+        acc :+ Reference(n \@ "name", n \@ "promote", interface(n), bindings(n))
+      case _ => acc
+    }
+  }
+
+try {
+  val app = XML.loadFile(args(0))
+  app.child.filter(_.label == "composite").map(parse(_))
+    .foreach(ns => println(ns.mkString("\n")))
+} catch {
+    case e: Exception =>
+      Console.err.println(s"ERROR: ${e.getMessage}")
+      sys.exit(1)
+}
