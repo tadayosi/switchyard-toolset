@@ -1,2 +1,3 @@
 # switchyard-toolset
-Useful tool set for analysing SwitchYard applications
+
+Useful tool set for analysing SwitchYard applications.
